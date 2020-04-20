@@ -7,4 +7,4 @@ services:
         ports:
             - ${outsidePort}:${insidePort}
         volumes:
-            - var/data/tmp:/tmp
+            - /var/data/tmp:/tmp
