@@ -52,6 +52,12 @@ public class DockerComposeMojo extends AbstractMojo {
     private Integer serverProt = 8080;
 
     /**
+     * docker私服的地址及端口eg:xxx.xxx.xxx.xxx:port.
+     */
+    @Parameter(required = true)
+    private String dockerNexusServer;
+
+    /**
      * 执行.
      * @throws MojoExecutionException
      * @throws MojoFailureException
@@ -71,6 +77,12 @@ public class DockerComposeMojo extends AbstractMojo {
         configuration.setObjectWrapper(new DefaultObjectWrapper(Configuration.DEFAULT_INCOMPATIBLE_IMPROVEMENTS));
         configuration.setTemplateLoader(new ClassTemplateLoader(this.getClass(), "/"));
 
+        String serverProtOut = "2" + serverProt.toString();
+        String projectNameTemp = project.getName().toLowerCase();
+        if (projectNameTemp.startsWith("oauth") || projectNameTemp.startsWith("config") || projectNameTemp.startsWith("eureka") ) {
+            serverProtOut = serverProt.toString();
+        }
+
         OutputStreamWriter writer = null;
         try {
             Template template = configuration.getTemplate(templateName + ".yml.ftl");
@@ -86,7 +98,8 @@ public class DockerComposeMojo extends AbstractMojo {
             context.put("projectName", project.getName());
             context.put("projectVersion", project.getVersion());
             context.put("profile", profile);
-            context.put("outsidePort", "2" + serverProt.toString());
+            context.put("dockerNexusServer", dockerNexusServer);
+            context.put("outsidePort", serverProtOut);
             context.put("insidePort", serverProt.toString());
             template.process(context, writer);
         } catch (IOException e) {
