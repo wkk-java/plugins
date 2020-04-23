@@ -5,10 +5,10 @@ import freemarker.template.Configuration;
 import freemarker.template.DefaultObjectWrapper;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -34,35 +34,42 @@ import java.util.Map;
 @Mojo(name="generate",defaultPhase = LifecyclePhase.COMPILE)
 public class DockerComposeMojo extends AbstractMojo {
     /**
-     * 模板名称.
+     * maven项目对象.
      */
-    @Parameter(defaultValue = "application")
-    private String templateName;
-
     @Parameter(defaultValue = "${project}", required = true, readonly = true)
     private MavenProject project;
     /**
+     * 应用归属组.
+     */
+    @Parameter
+    private String applicationGroup = "application";
+    /**
+     * docker私服地址.
+     */
+    @Parameter(required = true)
+    private String dockerNexusServer = "wk-aliyun";
+
+    /**
+     * docker私服端口.
+     */
+    @Parameter(required = true)
+    private String dockerNexusServerPort = "18082";
+
+    /**
      * 环境名称.
      */
-    private String profile = "dev";
-
+    private String ymlProfile = "dev";
     /**
      * 应用端口.
      */
     private Integer serverProt = 8080;
 
-    /**
-     * docker私服的地址及端口eg:xxx.xxx.xxx.xxx:port.
-     */
-    @Parameter(required = true)
-    private String dockerNexusServer;
 
     /**
      * 执行.
-     * @throws MojoExecutionException
-     * @throws MojoFailureException
+     * @throws MojoExecutionException 执行异常
      */
-    public void execute() throws MojoExecutionException, MojoFailureException {
+    public void execute() throws MojoExecutionException {
         super.getLog().info(project.getName() + ":" + project.getVersion() + "开始构建...");
         resolveApplicationYaml();
         generate();
@@ -71,16 +78,18 @@ public class DockerComposeMojo extends AbstractMojo {
 
     /**
      * 生成容器编排文件.
+     * @throws MojoExecutionException 执行异常
      */
-    private void generate() {
+    private void generate() throws MojoExecutionException{
         Configuration configuration = new Configuration(Configuration.DEFAULT_INCOMPATIBLE_IMPROVEMENTS);
         configuration.setObjectWrapper(new DefaultObjectWrapper(Configuration.DEFAULT_INCOMPATIBLE_IMPROVEMENTS));
         configuration.setTemplateLoader(new ClassTemplateLoader(this.getClass(), "/"));
 
+        String templateName ="application";
         String serverProtOut = "2" + serverProt.toString();
-        String projectNameTemp = project.getName().toLowerCase();
-        if (projectNameTemp.startsWith("oauth") || projectNameTemp.startsWith("config") || projectNameTemp.startsWith("eureka") ) {
+        if ("framework".equalsIgnoreCase(applicationGroup)) {
             serverProtOut = serverProt.toString();
+//            templateName = "";
         }
 
         OutputStreamWriter writer = null;
@@ -92,13 +101,22 @@ public class DockerComposeMojo extends AbstractMojo {
             if (!file.exists()) {
                 file.mkdir();
             }
+            Map<String, List<String>> activeProfileMap = project.getInjectedProfileIds();
+            if (activeProfileMap == null || activeProfileMap.isEmpty()) {
+                throw new MojoExecutionException("profile is empty!");
+            }
+            String profileIdKey = project.getParentArtifact().getGroupId() + ":" + project.getParentArtifact().getArtifactId() + ":" + project.getParentArtifact().getVersion();
+//            getLog().info("activeProfileMap:" + activeProfileMap.toString());
+            List<String> activeProfileIdList = activeProfileMap.get(profileIdKey);
+            String profile = String.join(",", activeProfileIdList);
+
             writer = new FileWriter(new File(filePath));
             Map<String, Object> context = new HashMap<String, Object>();
             context.put("project", project);
             context.put("projectName", project.getName());
             context.put("projectVersion", project.getVersion());
             context.put("profile", profile);
-            context.put("dockerNexusServer", dockerNexusServer);
+            context.put("dockerNexusServerPrefix", dockerNexusServer + ":" + dockerNexusServerPort + "/");
             context.put("outsidePort", serverProtOut);
             context.put("insidePort", serverProt.toString());
             template.process(context, writer);
@@ -120,7 +138,7 @@ public class DockerComposeMojo extends AbstractMojo {
      * 解析应用的yaml配置.
      * @throws MojoExecutionException 执行失败
      */
-    public void resolveApplicationYaml() throws MojoExecutionException {
+    private void resolveApplicationYaml() throws MojoExecutionException {
         List<Resource> resources = project.getResources();
         Resource resource = resources.get(0);
         String yamlFilePathString = resource.getDirectory() + "/bootstrap.yaml";
@@ -138,15 +156,15 @@ public class DockerComposeMojo extends AbstractMojo {
             while (iterator.hasNext()) {
                 LinkedHashMap objNext = (LinkedHashMap) iterator.next();
                 if (objNext.toString().contains("{spring={profiles={active")) {
-                    profile = (String)((LinkedHashMap)((LinkedHashMap)objNext.get("spring")).get("profiles")).get("active");
+                    ymlProfile = (String)((LinkedHashMap)((LinkedHashMap)objNext.get("spring")).get("profiles")).get("active");
                 } else {
                     String profileKey = (String) ((LinkedHashMap) objNext.get("spring")).get("profiles");
                     Integer serverPort = (Integer) ((LinkedHashMap) objNext.get("server")).get("port");
                     serverPortMap.put(profileKey, serverPort);
                 }
             }
-            getLog().info("profile is:" + profile);
-            serverProt = serverPortMap.get(profile);
+            getLog().info(yamlFilePathString + ",activeProfile is:" + ymlProfile);
+            serverProt = serverPortMap.get(ymlProfile);
         } catch (Exception ex) {
             getLog().error(ex);
         }
