@@ -5,7 +5,6 @@ import freemarker.template.Configuration;
 import freemarker.template.DefaultObjectWrapper;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -58,7 +57,7 @@ public class DockerComposeMojo extends AbstractMojo {
     /**
      * 环境名称.
      */
-    private String ymlProfile = "dev";
+    private String ymlProfile = null;
     /**
      * 应用端口.
      */
@@ -70,6 +69,10 @@ public class DockerComposeMojo extends AbstractMojo {
      * @throws MojoExecutionException 执行异常
      */
     public void execute() throws MojoExecutionException {
+        if (!"jar".equals(project.getPackaging())) {
+            getLog().info("非jar打包方式，跳过构建...");
+            return;
+        }
         super.getLog().info(project.getName() + ":" + project.getVersion() + "开始构建...");
         resolveApplicationYaml();
         generate();
@@ -86,9 +89,9 @@ public class DockerComposeMojo extends AbstractMojo {
         configuration.setTemplateLoader(new ClassTemplateLoader(this.getClass(), "/"));
 
         String templateName ="application";
-        String serverProtOut = "2" + serverProt.toString();
+        String serverProtOut = serverProt == null ? "8080" : 2 + serverProt.toString();
         if ("framework".equalsIgnoreCase(applicationGroup)) {
-            serverProtOut = serverProt.toString();
+            serverProtOut = serverProt == null ? "*" : serverProt.toString();
 //            templateName = "";
         }
 
@@ -154,18 +157,26 @@ public class DockerComposeMojo extends AbstractMojo {
             Iterator<Object> iterator = iterators.iterator();
             Map<String, Integer> serverPortMap = new HashMap<String, Integer>();
             while (iterator.hasNext()) {
-                LinkedHashMap objNext = (LinkedHashMap) iterator.next();
-                if (objNext.toString().contains("{spring={profiles={active")) {
-                    ymlProfile = (String)((LinkedHashMap)((LinkedHashMap)objNext.get("spring")).get("profiles")).get("active");
-                } else {
-                    String profileKey = (String) ((LinkedHashMap) objNext.get("spring")).get("profiles");
-                    Integer serverPort = (Integer) ((LinkedHashMap) objNext.get("server")).get("port");
+                Object nextObj = iterator.next();
+                getLog().info("nextObj:" + nextObj);
+                LinkedHashMap nextMap = (LinkedHashMap) nextObj;
+                getLog().info("nextMap:" + nextMap.toString());
+
+                if (nextMap.toString().contains("{server={port=")) {
+                    serverProt = (Integer) ((LinkedHashMap) nextMap.get("server")).get("port");
+                }
+                if (nextMap.toString().contains("{spring={profiles={active")) {
+                    ymlProfile = (String)((LinkedHashMap)((LinkedHashMap)nextMap.get("spring")).get("profiles")).get("active");
+                } else if(nextMap.toString().contains("{spring={profiles=") && nextMap.toString().contains("{server={port=")) {
+                    String profileKey = (String) ((LinkedHashMap) nextMap.get("spring")).get("profiles");
+                    Integer serverPort = (Integer) ((LinkedHashMap) nextMap.get("server")).get("port");
                     serverPortMap.put(profileKey, serverPort);
                 }
             }
             getLog().info(yamlFilePathString + ",activeProfile is:" + ymlProfile);
-            serverProt = serverPortMap.get(ymlProfile);
+            serverProt = ymlProfile != null ? serverPortMap.get(ymlProfile) : null;
         } catch (Exception ex) {
+            ex.printStackTrace();
             getLog().error(ex);
         }
     }
