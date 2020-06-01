@@ -74,7 +74,7 @@ public class DockerComposeMojo extends AbstractMojo {
             return;
         }
         super.getLog().info(project.getName() + ":" + project.getVersion() + "开始构建...");
-        resolveApplicationYaml();
+        //resolveApplicationYaml();
         generate();
         super.getLog().info(project.getName() + ":" + project.getVersion() + "构建结束...");
     }
@@ -89,9 +89,9 @@ public class DockerComposeMojo extends AbstractMojo {
         configuration.setTemplateLoader(new ClassTemplateLoader(this.getClass(), "/"));
 
         String templateName ="application";
-        String serverProtOut = serverProt == null ? "8080" : 2 + serverProt.toString();
+        String serverProtOut = serverProt == null ? "6000" : serverProt.toString();
         if ("framework".equalsIgnoreCase(applicationGroup)) {
-            serverProtOut = serverProt == null ? "*" : serverProt.toString();
+            serverProtOut = serverProt == null ? "3000" : serverProt.toString();
 //            templateName = "";
         }
 
