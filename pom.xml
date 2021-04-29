@@ -57,6 +57,7 @@
             </plugin>
             <!--  源码发布  -->
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
                 <version>3.2.1</version>
                 <configuration>
@@ -94,13 +95,13 @@
     <distributionManagement>
         <repository>
             <id>releases</id>
-            <name>Releases</name>
-            <url>http://106.14.202.235:1000/repository/maven-releases/</url>
+            <name>releases</name>
+            <url>http://wk-server:1000/repository/maven-releases/</url>
         </repository>
         <snapshotRepository>
             <id>snapshots</id>
             <name>Snapshot</name>
-            <url>http://106.14.202.235:1000/repository/maven-snapshots/</url>
+            <url>http://wk-server:1000/repository/maven-snapshots/</url>
         </snapshotRepository>
     </distributionManagement>
 </project>
